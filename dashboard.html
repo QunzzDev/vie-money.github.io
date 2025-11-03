@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VieMoney 💰 - Quản lý chi tiêu cá nhân</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/2590/2590670.png">
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f8fafc;
+    }
+    .card {
+      background-color: white;
+      border-radius: 1rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      padding: 1rem;
+      transition: all 0.3s ease;
+    }
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    .btn {
+      border-radius: 1rem;
+      padding: 0.6rem 1rem;
+      font-weight: 500;
+      transition: all 0.3s ease;
+    }
+    .btn:hover { opacity: 0.9; }
+    .active-tab {
+      background: linear-gradient(to right, #34d399, #10b981);
+      color: white;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between">
+
+  <!-- HEADER -->
+  <header class="text-center py-4 shadow bg-white sticky top-0 z-50">
+    <h1 class="text-2xl font-bold text-emerald-600">💰 VieMoney</h1>
+    <p class="text-gray-500 text-sm">Quản lý chi tiêu cá nhân thông minh</p>
+  </header>
+
+  <!-- TAB CHỌN THU / CHI -->
+  <div class="flex justify-center gap-4 mt-6">
+    <button id="tabIncome" class="btn bg-emerald-100 text-emerald-700 w-32">Thu nhập</button>
+    <button id="tabExpense" class="btn bg-red-100 text-red-700 w-32">Chi tiêu</button>
+  </div>
+
+  <!-- FORM NHẬP -->
+  <section id="formSection" class="max-w-md mx-auto mt-6 px-4">
+    <div class="card space-y-4">
+      <div>
+        <label class="font-semibold text-gray-700 block mb-2">Chọn mục</label>
+        <div id="categoryContainer" class="grid grid-cols-2 gap-2"></div>
+      </div>
+
+      <div>
+        <label class="font-semibold text-gray-700 block mb-1">Số tiền (VNĐ)</label>
+        <input id="amountInput" type="number" class="w-full border rounded-lg p-2 focus:ring-2 focus:ring-emerald-400" placeholder="Nhập số tiền...">
+      </div>
+
+      <div>
+        <label class="font-semibold text-gray-700 block mb-1">Ghi chú</label>
+        <input id="noteInput" type="text" class="w-full border rounded-lg p-2 focus:ring-2 focus:ring-emerald-400" placeholder="Ví dụ: Lương tháng 11...">
+      </div>
+
+      <div>
+        <label class="font-semibold text-gray-700 block mb-1">Ngày</label>
+        <input id="dateInput" type="date" class="w-full border rounded-lg p-2 focus:ring-2 focus:ring-emerald-400">
+      </div>
+
+      <button id="saveBtn" class="btn w-full bg-emerald-500 text-white mt-4">💾 Lưu giao dịch</button>
+    </div>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section id="dashboard" class="max-w-2xl mx-auto mt-8 px-4">
+    <div class="grid md:grid-cols-3 gap-4">
+      <div class="card text-center">
+        <h3 class="text-gray-500 text-sm">Tổng thu</h3>
+        <p id="totalIncome" class="text-2xl font-bold text-emerald-600">0₫</p>
+      </div>
+      <div class="card text-center">
+        <h3 class="text-gray-500 text-sm">Tổng chi</h3>
+        <p id="totalExpense" class="text-2xl font-bold text-red-600">0₫</p>
+      </div>
+      <div class="card text-center">
+        <h3 class="text-gray-500 text-sm">Còn lại</h3>
+        <p id="totalBalance" class="text-2xl font-bold text-gray-800">0₫</p>
+      </div>
+    </div>
+
+    <div class="card mt-6">
+      <canvas id="financeChart" height="150"></canvas>
+    </div>
+  </section>
+
+  <!-- DANH SÁCH GIAO DỊCH -->
+  <section class="max-w-2xl mx-auto mt-6 px-4">
+    <h2 class="font-bold text-lg mb-2">📋 Giao dịch gần đây</h2>
+    <ul id="transactionList" class="space-y-2"></ul>
+  </section>
+
+  <!-- TOOLBAR DƯỚI CÙNG -->
+  <footer class="fixed bottom-0 left-0 right-0 bg-white border-t shadow-inner py-2 flex justify-around items-center">
+    <button id="ocrBtn" class="text-gray-700 flex flex-col items-center">
+      📸 <span class="text-xs">Hóa đơn</span>
+    </button>
+    <button id="exportBtn" class="text-gray-700 flex flex-col items-center">
+      📂 <span class="text-xs">Xuất file</span>
+    </button>
+    <button id="larkBtn" class="text-gray-700 flex flex-col items-center">
+      💬 <span class="text-xs">Báo cáo</span>
+    </button>
+  </footer>
+  <!-- SCRIPT -->
+  <!-- Firebase -->
+  <script type="module">
+    // Firebase cấu hình (mày thay config của project thật nhé)
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDinh-Quan-Demo",
+      authDomain: "viemoney-app.firebaseapp.com",
+      projectId: "viemoney-app",
+      storageBucket: "viemoney-app.appspot.com",
+      messagingSenderId: "123456789",
+      appId: "1:123456789:web:demo"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // ==== DATA & UI ====
+    let currentTab = "income";
+    const incomeCategories = ["Lương", "Thưởng", "Đầu tư", "Khác"];
+    const expenseCategories = ["Ăn uống", "Mua sắm", "Đi lại", "Giải trí", "Hóa đơn", "Khác"];
+    const transactions = [];
+
+    // DOM
+    const tabIncome = document.getElementById("tabIncome");
+    const tabExpense = document.getElementById("tabExpense");
+    const categoryContainer = document.getElementById("categoryContainer");
+    const saveBtn = document.getElementById("saveBtn");
+    const transactionList = document.getElementById("transactionList");
+    const totalIncomeEl = document.getElementById("totalIncome");
+    const totalExpenseEl = document.getElementById("totalExpense");
+    const totalBalanceEl = document.getElementById("totalBalance");
+    const larkBtn = document.getElementById("larkBtn");
+    const exportBtn = document.getElementById("exportBtn");
+    const ocrBtn = document.getElementById("ocrBtn");
+
+    // ==== CHUYỂN TAB ====
+    function renderCategories() {
+      categoryContainer.innerHTML = "";
+      const cats = currentTab === "income" ? incomeCategories : expenseCategories;
+      cats.forEach(c => {
+        const btn = document.createElement("button");
+        btn.textContent = c;
+        btn.className = "btn border w-full text-sm";
+        btn.onclick = () => {
+          document.querySelectorAll("#categoryContainer button").forEach(b => b.classList.remove("active-tab"));
+          btn.classList.add("active-tab");
+          btn.dataset.selected = c;
+        };
+        categoryContainer.appendChild(btn);
+      });
+    }
+
+    tabIncome.onclick = () => {
+      currentTab = "income";
+      tabIncome.classList.add("bg-emerald-500", "text-white");
+      tabExpense.classList.remove("bg-red-500", "text-white");
+      renderCategories();
+    };
+
+    tabExpense.onclick = () => {
+      currentTab = "expense";
+      tabExpense.classList.add("bg-red-500", "text-white");
+      tabIncome.classList.remove("bg-emerald-500", "text-white");
+      renderCategories();
+    };
+
+    renderCategories();
+
+    // ==== LƯU GIAO DỊCH ====
+    saveBtn.onclick = async () => {
+      const categoryBtn = document.querySelector("#categoryContainer .active-tab");
+      const category = categoryBtn ? categoryBtn.textContent : "Không chọn";
+      const amount = Number(document.getElementById("amountInput").value);
+      const note = document.getElementById("noteInput").value || "";
+      const date = document.getElementById("dateInput").value || new Date().toISOString().split("T")[0];
+
+      if (!amount || amount <= 0) {
+        alert("❗ Nhập số tiền hợp lệ!");
+        return;
+      }
+
+      const transaction = { type: currentTab, category, amount, note, date };
+      transactions.push(transaction);
+
+      await addDoc(collection(db, "transactions"), transaction);
+      renderTransactions();
+      updateTotals();
+
+      // Reset form
+      document.getElementById("amountInput").value = "";
+      document.getElementById("noteInput").value = "";
+    };
+
+    // ==== HIỂN THỊ DANH SÁCH ====
+    function renderTransactions() {
+      transactionList.innerHTML = "";
+      transactions.slice().reverse().forEach(t => {
+        const li = document.createElement("li");
+        li.className = "card flex justify-between items-center text-sm";
+        li.innerHTML = `
+          <div>
+            <span class="font-semibold ${t.type === "income" ? "text-emerald-600" : "text-red-600"}">${t.category}</span><br>
+            <span class="text-gray-500">${t.note}</span>
+          </div>
+          <div class="text-right">
+            <span class="${t.type === "income" ? "text-emerald-600" : "text-red-600"} font-bold">
+              ${t.type === "income" ? "+" : "-"}${t.amount.toLocaleString()}₫
+            </span><br>
+            <span class="text-gray-400 text-xs">${t.date}</span>
+          </div>`;
+        transactionList.appendChild(li);
+      });
+    }
+
+    // ==== CẬP NHẬT TỔNG ====
+    function updateTotals() {
+      const income = transactions.filter(t => t.type === "income").reduce((sum, t) => sum + t.amount, 0);
+      const expense = transactions.filter(t => t.type === "expense").reduce((sum, t) => sum + t.amount, 0);
+      const balance = income - expense;
+      totalIncomeEl.textContent = income.toLocaleString() + "₫";
+      totalExpenseEl.textContent = expense.toLocaleString() + "₫";
+      totalBalanceEl.textContent = balance.toLocaleString() + "₫";
+      updateChart(income, expense);
+    }
+
+    // ==== BIỂU ĐỒ ====
+    let chart;
+    function updateChart(income, expense) {
+      const ctx = document.getElementById("financeChart");
+      if (chart) chart.destroy();
+      chart = new Chart(ctx, {
+        type: "doughnut",
+        data: {
+          labels: ["Thu nhập", "Chi tiêu"],
+          datasets: [{
+            data: [income, expense],
+            backgroundColor: ["#10b981", "#ef4444"]
+          }]
+        },
+        options: {
+          plugins: { legend: { position: "bottom" } }
+        }
+      });
+    }
+
+    // ==== GỬI LARK ====
+    larkBtn.onclick = async () => {
+      const totalIncome = totalIncomeEl.textContent;
+      const totalExpense = totalExpenseEl.textContent;
+      const totalBalance = totalBalanceEl.textContent;
+      const report = `💰 *Báo cáo VieMoney*\nTổng thu: ${totalIncome}\nTổng chi: ${totalExpense}\nCòn lại: ${totalBalance}`;
+      await fetch("https://open.larksuite.com/webhook/demo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ msg_type: "text", content: { text: report } })
+      });
+      alert("✅ Đã gửi báo cáo lên Lark!");
+    };
+
+    // ==== OCR ====
+    ocrBtn.onclick = async () => {
+      const fileInput = document.createElement("input");
+      fileInput.type = "file";
+      fileInput.accept = "image/*";
+      fileInput.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const { createWorker } = Tesseract;
+        const worker = await createWorker("eng");
+        const { data: { text } } = await worker.recognize(file);
+        alert("📄 OCR kết quả:\n" + text);
+        await worker.terminate();
+      };
+      fileInput.click();
+    };
+
+    // ==== XUẤT FILE ====
+    exportBtn.onclick = () => {
+      const csv = transactions.map(t => `${t.date},${t.type},${t.category},${t.amount},${t.note}`).join("\n");
+      const blob = new Blob(["Ngày,Loại,Mục,Số tiền,Ghi chú\n" + csv], { type: "text/csv" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "VieMoney.csv";
+      link.click();
+    };
+
+  </script>
+
+  <!-- Chart.js & Tesseract -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+
+</body>
+</html>
